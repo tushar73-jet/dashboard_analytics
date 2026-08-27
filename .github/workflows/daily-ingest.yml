@@ -1,0 +1,45 @@
+name: Daily Instagram Data Ingestion
+
+on:
+  schedule:
+    # Run daily at 06:00 UTC (11:30 AM IST)
+    - cron: '0 6 * * *'
+
+  # Allow manual triggering for testing
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    name: Ingest Instagram Data
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: 'ingestion/requirements.txt'
+
+      - name: Install dependencies
+        run: pip install -r ingestion/requirements.txt
+
+      - name: Check & refresh token (if near expiry)
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          META_APP_ID: ${{ secrets.META_APP_ID }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python ingestion/refresh_token.py
+        continue-on-error: true  # Don't block ingestion if refresh fails
+
+      - name: Run ingestion
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_ACCOUNT_ID: ${{ secrets.IG_ACCOUNT_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python ingestion/ingest.py
